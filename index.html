@@ -1886,8 +1886,8 @@ import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
           spawnParticles(hit.x, hit.y, "#fff3c4", 6, { speed: 70, life: 220, size: 5 });
           spawnParticles(hit.x, hit.y, "#ff9800", 10, { speed: 210, life: 380, size: 3.5 });
           spawnParticles(hit.x, hit.y, "#f4511e", 8, { speed: 260, life: 420, size: 3 });
-          game.shakeTime = Math.max(game.shakeTime, 200);
-          game.shakeMag = Math.max(game.shakeMag, 8);
+          // 화면 흔들림은 넣지 않음 — 공격 속도가 빠르거나 다중 사격/관통과 겹치면 폭발이 연달아 터져
+          // 흔들림이 거의 끊이지 않고 계속되는 문제가 있었음(사용자 피드백). 링/파티클/효과음만으로 임팩트를 전달
           sfxExplosion();
           for (const other of game.enemies){
             if (other !== hit && other.hp > 0 && Math.hypot(other.x - hit.x, other.y - hit.y) <= R){
