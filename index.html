@@ -890,7 +890,7 @@ import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
   // 중간 보스와 최종 보스는 서로 다른 스킬 구성을 쓰도록 의도적으로 다르게 둠.
   const BOSS_TYPES = {
     mid: { hp: 420, radius: 26, speed: 65, contactDmg: 15, contactInterval: 600, score: 200, expValue: 60, color: "#ab47bc", label: "중간 보스", skills: ["dash", "nova"], skillCooldownBase: 4600 },
-    final: { hp: 950, radius: 34, speed: 50, contactDmg: 22, contactInterval: 600, score: 500, expValue: 120, color: "#d84315", label: "최종 보스", skills: ["meteor", "burst"], skillCooldownBase: 4200 },
+    final: { hp: 1450, radius: 34, speed: 58, contactDmg: 28, contactInterval: 550, score: 650, expValue: 150, color: "#d84315", label: "최종 보스", skills: ["meteor", "burst"], skillCooldownBase: 3300 },
   };
 
   function expToNext(level){ return 20 + (level - 1) * 15; }
@@ -916,7 +916,7 @@ import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
     { name: "치명타", icon: "💥", color: "#ff7043", desc: "공격 시 12% 확률로 치명타(2배 피해)", iconRect: [332,843,183,169], apply: p => { p.critChance = Math.min(0.6, p.critChance + 0.12); }, readout: p => `치명타 ${Math.round(p.critChance * 100)}%` },
     { name: "재생", icon: "💚", color: "#9ccc65", desc: "초당 체력 1 자동 회복", iconRect: [601,843,183,169], apply: p => { p.regen += 1; }, readout: p => `초당 ${p.regen.toFixed(1)} 회복` },
     { name: "가시 갑옷", icon: "🦔", color: "#78909c", desc: "적이 닿을 때마다 그 적에게 반사 피해 4", iconRect: [870,843,183,169], apply: p => { p.thorns += 4; }, readout: p => `반사 피해 ${p.thorns}` },
-    { name: "폭발탄", icon: "💣", color: "#f4511e", desc: "화살이 명중하면 주변 적에게 폭발 피해 8", iconRect: [63,1163,183,135], apply: p => { p.splashRadius = Math.max(p.splashRadius, 50); p.splashDmg += 8; }, readout: p => `폭발 피해 ${p.splashDmg}` },
+    { name: "폭발탄", icon: "💣", color: "#f4511e", desc: "화살이 명중하면 반경 50 안의 주변 적에게 폭발 피해 8 (충격파로 표시됨)", iconRect: [63,1163,183,135], apply: p => { p.splashRadius = Math.max(p.splashRadius, 50); p.splashDmg += 8; }, readout: p => `폭발 반경 ${Math.round(p.splashRadius)} · 피해 ${p.splashDmg}` },
     { name: "냉기 사격", icon: "❄️", color: "#29b6f6", desc: "화살에 맞은 적의 이동 속도를 잠시 늦춤", iconRect: [332,1163,183,135], apply: p => { p.slowFactor = Math.min(0.7, p.slowFactor + 0.2); p.slowDuration = Math.min(2500, p.slowDuration + 700); }, readout: p => `둔화 ${Math.round(p.slowFactor * 100)}% · ${(p.slowDuration / 1000).toFixed(1)}초` },
     { name: "황금손", icon: "💰", color: "#ffd54f", desc: "스테이지 종료 시 획득 골드 +20%", iconRect: [601,1163,183,135], apply: p => { p.goldBonus += 0.2; }, readout: p => `골드 +${Math.round(p.goldBonus * 100)}%` },
     { name: "여벌 목숨", icon: "🩹", color: "#f06292", desc: "치명적인 피해를 1회 버텨냅니다 (체력 30%로 부활)", iconRect: [870,1163,183,135], apply: p => { p.extraLives += 1; }, readout: p => `부활 ${p.extraLives}회 남음` },
@@ -1046,6 +1046,12 @@ import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
     for (let i = 0; i < 3; i++){
       playTone({ freq: 900 - i * 120, duration: 0.08, type: "square", volume: 0.08, delay: i * 0.04 });
     }
+  }
+  // 폭발탄 카드: 둔탁한 저음 충격 + 노이즈 + 짧은 파열음으로 확실한 폭발감을 줌
+  function sfxExplosion(){
+    playNoise({ duration: 0.3, volume: 0.22, filterFreq: 260, filterType: "lowpass" });
+    playTone({ freq: 130, freqEnd: 38, duration: 0.32, type: "sawtooth", volume: 0.2 });
+    playTone({ freq: 640, freqEnd: 140, duration: 0.1, type: "square", volume: 0.09 });
   }
 
   function sfxVictory(){
@@ -1402,6 +1408,7 @@ import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
       orbs: [],
       particles: [],
       deathFx: [],
+      explosions: [], // 폭발탄 카드의 확장하는 충격파 링 이펙트
       floatTexts: [],
       buffPulses: [],
       shakeTime: 0,
@@ -1612,7 +1619,7 @@ import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
       game.deathFx.push({ x: tx, y: ty, radius: 74, color: "#ff8a3c", life: 340, maxLife: 340 });
       const dist = Math.hypot(game.player.x - tx, game.player.y - ty);
       if (dist < 62){
-        const dmg = Math.round(24 * mult);
+        const dmg = Math.round(32 * mult);
         game.player.hp -= dmg;
         triggerHitEffect(game.player.x, game.player.y, dmg);
       }
@@ -1622,18 +1629,18 @@ import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
       en.skillState = "recover";
       en.skillTimer = 550;
     } else if (which === "burst"){
-      const count = 10;
+      const count = 12;
       for (let i = 0; i < count; i++){
         const a = (i / count) * Math.PI * 2;
         game.enemyProjectiles.push({
           x: en.x, y: en.y,
-          vx: Math.cos(a) * 210, vy: Math.sin(a) * 210,
-          dmg: Math.round(9 * mult), radius: 6, color: BOSS_TYPES.final.color,
+          vx: Math.cos(a) * 230, vy: Math.sin(a) * 230,
+          dmg: Math.round(11 * mult), radius: 6, color: BOSS_TYPES.final.color,
         });
       }
       sfxBossBurst();
       en.skillState = "recover";
-      en.skillTimer = 750;
+      en.skillTimer = 700;
     }
   }
 
@@ -1808,6 +1815,10 @@ import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
       game.deathFx[i].life -= dt;
       if (game.deathFx[i].life <= 0) game.deathFx.splice(i, 1);
     }
+    for (let i = game.explosions.length - 1; i >= 0; i--){
+      game.explosions[i].life -= dt;
+      if (game.explosions[i].life <= 0) game.explosions.splice(i, 1);
+    }
     for (let i = game.floatTexts.length - 1; i >= 0; i--){
       const f = game.floatTexts[i];
       f.y += f.vy * dt / 1000;
@@ -1869,10 +1880,20 @@ import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
           spawnFloatText(game.player.x, game.player.y - PLAYER_RADIUS - 6, "+" + game.player.lifesteal, "#ef5350", 12);
         }
         if (game.player.splashRadius > 0){
-          spawnParticles(hit.x, hit.y, "#f4511e", 10, { speed: 210, life: 350, size: 3 });
+          const R = game.player.splashRadius;
+          // 폭발탄 임팩트: 반경 크기의 충격파 링 + 화염 파티클 + 화면 흔들림 + 폭발음으로 "무슨 일이 일어났는지" 확실히 보이게 함
+          game.explosions.push({ x: hit.x, y: hit.y, radius: R, life: 340, maxLife: 340 });
+          spawnParticles(hit.x, hit.y, "#fff3c4", 6, { speed: 70, life: 220, size: 5 });
+          spawnParticles(hit.x, hit.y, "#ff9800", 10, { speed: 210, life: 380, size: 3.5 });
+          spawnParticles(hit.x, hit.y, "#f4511e", 8, { speed: 260, life: 420, size: 3 });
+          game.shakeTime = Math.max(game.shakeTime, 200);
+          game.shakeMag = Math.max(game.shakeMag, 8);
+          sfxExplosion();
           for (const other of game.enemies){
-            if (other !== hit && other.hp > 0 && Math.hypot(other.x - hit.x, other.y - hit.y) <= game.player.splashRadius){
+            if (other !== hit && other.hp > 0 && Math.hypot(other.x - hit.x, other.y - hit.y) <= R){
               other.hp -= game.player.splashDmg;
+              spawnParticles(other.x, other.y, "#ffb300", 5, { speed: 140, life: 260, size: 2.5 });
+              spawnFloatText(other.x, other.y - other.radius - 6, "-" + game.player.splashDmg, "#ff9800", 12);
             }
           }
         }
@@ -2437,6 +2458,25 @@ import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
       ctx.arc(f.x, f.y, f.radius * t, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
+    }
+
+    // 폭발탄 충격파: 반경 크기의 확장하는 이중 링(밝은 안쪽 + 굵은 화염색 바깥)으로 폭발 범위를 그대로 보여줌
+    for (const ex of game.explosions){
+      const t = 1 - ex.life / ex.maxLife;
+      const r = ex.radius * Math.min(1, t * 1.5);
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, 1 - t);
+      ctx.strokeStyle = "rgba(244,81,53,.55)";
+      ctx.lineWidth = 10;
+      ctx.beginPath();
+      ctx.arc(ex.x, ex.y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = "#ffc107";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(ex.x, ex.y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
     }
 
     // enemies (3D 모델이 준비된 개체는 몸통을 three-canvas가 그리므로 2D는 HP바/상태효과만 얹음)
